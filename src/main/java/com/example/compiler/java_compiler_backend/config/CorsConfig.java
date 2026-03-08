@@ -19,6 +19,7 @@ public class CorsConfig {
         config.setAllowedOrigins(List.of("*"));
         config.setAllowedMethods(List.of("*"));
         config.setAllowedHeaders(List.of("*"));
+        config.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source =
                 new UrlBasedCorsConfigurationSource();
@@ -27,5 +28,4 @@ public class CorsConfig {
 
         return new CorsFilter(source);
     }
-
 }
