@@ -16,7 +16,11 @@ public class CorsConfig {
 
         CorsConfiguration config = new CorsConfiguration();
 
-        config.setAllowedOrigins(List.of("*"));
+        config.setAllowedOrigins(List.of(
+                "http://localhost:5173",
+                "https://codecompiler-ai.vercel.app"
+        ));
+
         config.setAllowedMethods(List.of("*"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
