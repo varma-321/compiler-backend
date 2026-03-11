@@ -15,11 +15,18 @@ public class CodeExecutionService {
         try {
 
             Path dir = Files.createTempDirectory("java_exec");
-            Path file = dir.resolve("Main.java");
+
+            String className = "Main";
+            java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("class\\s+([A-Za-z0-9_]+)").matcher(code);
+            if (matcher.find()) {
+                className = matcher.group(1);
+            }
+
+            Path file = dir.resolve(className + ".java");
 
             Files.writeString(file, code);
 
-            Process compile = new ProcessBuilder("javac", "Main.java")
+            Process compile = new ProcessBuilder("javac", className + ".java")
                     .directory(dir.toFile())
                     .start();
 
@@ -32,8 +39,9 @@ public class CodeExecutionService {
                 return result;
             }
 
-            Process run = new ProcessBuilder("java", "Main")
+            Process run = new ProcessBuilder("java", className)
                     .directory(dir.toFile())
+                    .redirectErrorStream(true)
                     .start();
 
             run.waitFor();

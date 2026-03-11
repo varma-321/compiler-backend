@@ -3,6 +3,8 @@ package com.example.compiler.java_compiler_backend.model;
 public class CodeRequest {
 
     private String code;
+    private Integer hintLevel;
+    private String type;
 
     public CodeRequest() {
     }
@@ -17,5 +19,21 @@ public class CodeRequest {
 
     public void setCode(String code) {
         this.code = code;
+    }
+
+    public Integer getHintLevel() {
+        return hintLevel;
+    }
+
+    public void setHintLevel(Integer hintLevel) {
+        this.hintLevel = hintLevel;
+    }
+
+    public String getType() {
+        return type;
+    }
+
+    public void setType(String type) {
+        this.type = type;
     }
 }
