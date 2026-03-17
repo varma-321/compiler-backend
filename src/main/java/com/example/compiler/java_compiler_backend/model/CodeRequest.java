@@ -5,6 +5,8 @@ public class CodeRequest {
     private String code;
     private Integer hintLevel;
     private String type;
+    private String problemId;
+    private String inputs;
 
     public CodeRequest() {
     }
@@ -35,5 +37,21 @@ public class CodeRequest {
 
     public void setType(String type) {
         this.type = type;
+    }
+
+    public String getProblemId() {
+        return problemId;
+    }
+
+    public void setProblemId(String problemId) {
+        this.problemId = problemId;
+    }
+
+    public String getInputs() {
+        return inputs;
+    }
+
+    public void setInputs(String inputs) {
+        this.inputs = inputs;
     }
 }

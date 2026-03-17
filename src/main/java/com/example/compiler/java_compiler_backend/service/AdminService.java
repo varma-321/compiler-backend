@@ -6,6 +6,7 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import org.mindrot.jbcrypt.BCrypt;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -20,17 +21,19 @@ import java.util.UUID;
 public class AdminService {
 
     private final AdminRepository adminRepository;
-    private final JavaMailSender mailSender;
+
+    // Optional: mail is not a required dependency — the app starts fine without SMTP config.
+    @Autowired(required = false)
+    private JavaMailSender mailSender;
 
     @Value("${jwt.secret}")
     private String jwtSecret;
 
-    @Value("${spring.mail.username}")
+    @Value("${admin.from-email:no-reply@localhost}")
     private String fromEmail;
 
-    public AdminService(AdminRepository adminRepository, JavaMailSender mailSender) {
+    public AdminService(AdminRepository adminRepository) {
         this.adminRepository = adminRepository;
-        this.mailSender = mailSender;
     }
 
     public Admin signup(String name, String email, String password) throws Exception {
@@ -43,27 +46,34 @@ public class AdminService {
         admin.setEmail(email);
         admin.setPassword(BCrypt.hashpw(password, BCrypt.gensalt()));
         admin.setStatus("PENDING_APPROVAL");
-        
+
         String token = UUID.randomUUID().toString();
         admin.setApprovalToken(token);
 
         Admin savedAdmin = adminRepository.save(admin);
 
-        // Send email to the hardcoded super-admin email
-        sendApprovalEmail("yashwanthvarma.simats@gmail.com", savedAdmin.getEmail(), token);
+        // Try to send approval email; silently ignore if mail is not configured.
+        try {
+            sendApprovalEmail("yashwanthvarma.simats@gmail.com", savedAdmin.getEmail(), token);
+        } catch (Exception e) {
+            System.out.println("Mail not configured. Approval token: " + token);
+        }
 
         return savedAdmin;
     }
 
     private void sendApprovalEmail(String to, String adminEmail, String token) {
+        if (mailSender == null) {
+            System.out.println("No mail sender configured. Approval token for " + adminEmail + ": " + token);
+            return;
+        }
         try {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(fromEmail);
             message.setTo(to);
             message.setSubject("New Admin Approval Required: " + adminEmail);
-            String approvalUrl = "https://compiler-backend-perc.onrender.com/api/admin/approve?token=" + token;
-            message.setText("A new user requested admin access: " + adminEmail + "\n\n" +
-                    "Click the following link to approve:\n" + approvalUrl);
+            String approvalUrl = "http://localhost:8080/api/admin/approve?token=" + token;
+            message.setText("A new user requested admin access: " + adminEmail + "\n\nApproval link:\n" + approvalUrl);
             mailSender.send(message);
         } catch (Exception e) {
             e.printStackTrace();
@@ -100,7 +110,7 @@ public class AdminService {
                 .setSubject(admin.getEmail())
                 .claim("role", "admin")
                 .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + 86400000)) // 1 day
+                .setExpiration(new Date(System.currentTimeMillis() + 86400000))
                 .signWith(key, SignatureAlgorithm.HS512)
                 .compact();
     }
