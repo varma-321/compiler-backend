@@ -178,63 +178,63 @@ public class ProblemService {
     }
 
     private void seedContainsDuplicate() {
-        Problem p = newProblem("contains-duplicate", "Contains Duplicate", "Easy", "Arrays", "Check duplicates.", "class Solution {}", "{}", "[]", "");
+        Problem p = newProblem("contains-duplicate", "Contains Duplicate", "Easy", "Arrays", "Check duplicates.", "class Solution {\n    public boolean containsDuplicate(int[] nums) {\n        \n    }\n}", "{\"name\": \"containsDuplicate\", \"returnType\": \"boolean\", \"params\": [{\"type\": \"int[]\", \"name\": \"nums\"}], \"isStatic\": false}", "[]", "");
         tc(p, "{\"nums\":\"[1,2,3,1]\"}", "true", false, null);
     }
     private void seedValidAnagram() {
-        Problem p = newProblem("valid-anagram", "Valid Anagram", "Easy", "Strings", "Check anagram.", "class Solution {}", "{}", "[]", "");
+        Problem p = newProblem("valid-anagram", "Valid Anagram", "Easy", "Strings", "Check anagram.", "class Solution {\n    public boolean isAnagram(String s, String t) {\n        \n    }\n}", "{\"name\": \"isAnagram\", \"returnType\": \"boolean\", \"params\": [{\"type\": \"String\", \"name\": \"s\"}, {\"type\": \"String\", \"name\": \"t\"}], \"isStatic\": false}", "[]", "");
         tc(p, "{\"s\":\"anagram\",\"t\":\"nagaram\"}", "true", false, null);
     }
     private void seedValidPalindrome() {
-        Problem p = newProblem("valid-palindrome", "Valid Palindrome", "Easy", "Strings", "Check palindrome.", "class Solution {}", "{}", "[]", "");
+        Problem p = newProblem("valid-palindrome", "Valid Palindrome", "Easy", "Strings", "Check palindrome.", "class Solution {\n    public boolean isPalindrome(String s) {\n        \n    }\n}", "{\"name\": \"isPalindrome\", \"returnType\": \"boolean\", \"params\": [{\"type\": \"String\", \"name\": \"s\"}], \"isStatic\": false}", "[]", "");
         tc(p, "{\"s\":\"racecar\"}", "true", false, null);
     }
     private void seedMaximumConsecutiveOnes() {
-        Problem p = newProblem("maximum-consecutive-ones", "Max Consecutive Ones", "Easy", "Arrays", "Count ones.", "class Solution {}", "{}", "[]", "");
+        Problem p = newProblem("maximum-consecutive-ones", "Max Consecutive Ones", "Easy", "Arrays", "Count ones.", "class Solution {\n    public int findMaxConsecutiveOnes(int[] nums) {\n        \n    }\n}", "{\"name\": \"findMaxConsecutiveOnes\", \"returnType\": \"int\", \"params\": [{\"type\": \"int[]\", \"name\": \"nums\"}], \"isStatic\": false}", "[]", "");
         tc(p, "{\"nums\":\"[1,1,0,1,1,1]\"}", "3", false, null);
     }
     private void seedFindMissingNumber() {
-        Problem p = newProblem("arr-39", "Find Missing Number", "Easy", "Arrays", "Missing num.", "class Solution {}", "{}", "[]", "");
+        Problem p = newProblem("arr-39", "Find Missing Number", "Easy", "Arrays", "Missing num.", "class Solution {\n    public int missingNumber(int[] nums) {\n        \n    }\n}", "{\"name\": \"missingNumber\", \"returnType\": \"int\", \"params\": [{\"type\": \"int[]\", \"name\": \"nums\"}], \"isStatic\": false}", "[]", "");
         tc(p, "{\"nums\":\"[3,0,1]\"}", "2", false, null);
     }
     private void seedMoveZeroes() {
-        Problem p = newProblem("arr-36", "Move Zeroes", "Easy", "Arrays", "Move 0s.", "class Solution {}", "{}", "[]", "");
+        Problem p = newProblem("arr-36", "Move Zeroes", "Easy", "Arrays", "Move 0s.", "class Solution {\n    public void moveZeroes(int[] nums) {\n        \n    }\n}", "{\"name\": \"moveZeroes\", \"returnType\": \"void\", \"params\": [{\"type\": \"int[]\", \"name\": \"nums\"}], \"isStatic\": false}", "[]", "");
         tc(p, "{\"nums\":\"[0,1,0,3,12]\"}", "void", false, null);
     }
     private void seedIntersectionOfTwoSortedArrays() {
-        Problem p = newProblem("arr-38", "Intersection", "Easy", "Arrays", "Intersection.", "class Solution {}", "{}", "[]", "");
+        Problem p = newProblem("arr-38", "Intersection", "Easy", "Arrays", "Intersection.", "class Solution {\n    public int[] intersection(int[] nums1, int[] nums2) {\n        \n    }\n}", "{\"name\": \"intersection\", \"returnType\": \"int[]\", \"params\": [{\"type\": \"int[]\", \"name\": \"nums1\"}, {\"type\": \"int[]\", \"name\": \"nums2\"}], \"isStatic\": false}", "[]", "");
         tc(p, "{\"nums1\":\"[2]\",\"nums2\":\"[2]\"}", "[2]", false, null);
     }
     private void seedUnionOfTwoSortedArrays() {
-        Problem p = newProblem("arr-37", "Union", "Easy", "Arrays", "Union.", "class Solution {}", "{}", "[]", "");
+        Problem p = newProblem("arr-37", "Union", "Easy", "Arrays", "Union.", "class Solution {\n    public int[] findUnion(int[] nums1, int[] nums2) {\n        \n    }\n}", "{\"name\": \"findUnion\", \"returnType\": \"int[]\", \"params\": [{\"type\": \"int[]\", \"name\": \"nums1\"}, {\"type\": \"int[]\", \"name\": \"nums2\"}], \"isStatic\": false}", "[]", "");
         tc(p, "{\"nums1\":\"[1]\",\"nums2\":\"[2]\"}", "[1, 2]", false, null);
     }
     private void seedLargestElementInArray() {
-        Problem p = newProblem("arr-31", "Largest", "Easy", "Arrays", "Max.", "class Solution {}", "{}", "[]", "");
+        Problem p = newProblem("arr-31", "Largest", "Easy", "Arrays", "Max.", "class Solution {\n    public int largest(int[] nums) {\n        \n    }\n}", "{\"name\": \"largest\", \"returnType\": \"int\", \"params\": [{\"type\": \"int[]\", \"name\": \"nums\"}], \"isStatic\": false}", "[]", "");
         tc(p, "{\"nums\":\"[1,2,3]\"}", "3", false, null);
     }
     private void seedSecondLargestElement() {
-        Problem p = newProblem("arr-32", "Second Largest", "Easy", "Arrays", "2nd Max.", "class Solution {}", "{}", "[]", "");
+        Problem p = newProblem("arr-32", "Second Largest", "Easy", "Arrays", "2nd Max.", "class Solution {\n    public int print2largest(int[] nums) {\n        \n    }\n}", "{\"name\": \"print2largest\", \"returnType\": \"int\", \"params\": [{\"type\": \"int[]\", \"name\": \"nums\"}], \"isStatic\": false}", "[]", "");
         tc(p, "{\"nums\":\"[1,2,3]\"}", "2", false, null);
     }
     private void seedCheckIfArrayIsSorted() {
-        Problem p = newProblem("arr-33", "Is Sorted", "Easy", "Arrays", "Check sorted.", "class Solution {}", "{}", "[]", "");
+        Problem p = newProblem("arr-33", "Is Sorted", "Easy", "Arrays", "Check sorted.", "class Solution {\n    public boolean check(int[] nums) {\n        \n    }\n}", "{\"name\": \"check\", \"returnType\": \"boolean\", \"params\": [{\"type\": \"int[]\", \"name\": \"nums\"}], \"isStatic\": false}", "[]", "");
         tc(p, "{\"nums\":\"[1,2,3]\"}", "true", false, null);
     }
     private void seedRemoveDuplicatesFromSortedArray() {
-        Problem p = newProblem("arr-27", "Remove Duplicates", "Easy", "Arrays", "Unique count.", "class Solution {}", "{}", "[]", "");
+        Problem p = newProblem("arr-27", "Remove Duplicates", "Easy", "Arrays", "Unique count.", "class Solution {\n    public int removeDuplicates(int[] nums) {\n        \n    }\n}", "{\"name\": \"removeDuplicates\", \"returnType\": \"int\", \"params\": [{\"type\": \"int[]\", \"name\": \"nums\"}], \"isStatic\": false}", "[]", "");
         tc(p, "{\"nums\":\"[1,1,2]\"}", "2", false, null);
     }
     private void seedStockBuyAndSell() {
-        Problem p = newProblem("arr-6", "Stock Profit", "Easy", "Arrays", "Max profit.", "class Solution {}", "{}", "[]", "");
+        Problem p = newProblem("arr-6", "Stock Profit", "Easy", "Arrays", "Max profit.", "class Solution {\n    public int maxProfit(int[] prices) {\n        \n    }\n}", "{\"name\": \"maxProfit\", \"returnType\": \"int\", \"params\": [{\"type\": \"int[]\", \"name\": \"prices\"}], \"isStatic\": false}", "[]", "");
         tc(p, "{\"prices\":\"[7,1,5]\"}", "4", false, null);
     }
     private void seedKadanesAlgorithm() {
-        Problem p = newProblem("arr-4", "Kadane", "Medium", "Arrays", "Max sub sum.", "class Solution {}", "{}", "[]", "");
+        Problem p = newProblem("arr-4", "Kadane", "Medium", "Arrays", "Max sub sum.", "class Solution {\n    public int maxSubArray(int[] nums) {\n        \n    }\n}", "{\"name\": \"maxSubArray\", \"returnType\": \"int\", \"params\": [{\"type\": \"int[]\", \"name\": \"nums\"}], \"isStatic\": false}", "[]", "");
         tc(p, "{\"nums\":\"[-1,2,3]\"}", "5", false, null);
     }
     private void seedMajorityElementN2() {
-        Problem p = newProblem("arr-15", "Majority Element", "Easy", "Arrays", ">n/2", "class Solution {}", "{}", "[]", "");
+        Problem p = newProblem("arr-15", "Majority Element", "Easy", "Arrays", ">n/2", "class Solution {\n    public int majorityElement(int[] nums) {\n        \n    }\n}", "{\"name\": \"majorityElement\", \"returnType\": \"int\", \"params\": [{\"type\": \"int[]\", \"name\": \"nums\"}], \"isStatic\": false}", "[]", "");
         tc(p, "{\"nums\":\"[2,2,1]\"}", "2", false, null);
     }
 
