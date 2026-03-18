@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 
+import java.util.*;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
@@ -12,10 +13,15 @@ import java.net.URL;
 @Service
 public class GroqService {
 
-    @org.springframework.beans.factory.annotation.Value("${GROQ_API_KEY:}")
-    private String apiKey;
+    private final String apiKey;
+    private final ObjectMapper mapper;
 
     private static final String API_URL = "https://api.groq.com/openai/v1/chat/completions";
+
+    public GroqService(@org.springframework.beans.factory.annotation.Value("${GROQ_API_KEY:}") String apiKey) {
+        this.apiKey = apiKey;
+        this.mapper = new ObjectMapper();
+    }
 
     public String askAI(String prompt) throws Exception {
         return askAI(null, prompt, "llama-3.1-8b-instant");
@@ -37,25 +43,28 @@ public class GroqService {
         conn.setRequestProperty("Content-Type", "application/json");
         conn.setDoOutput(true);
 
-        String finalSystemPrompt = systemPrompt != null ? systemPrompt : "You are an elite Java DSA Architect and Mentor. Provide clean, professional, and efficient Java-centric solutions. Always prioritize modern Java (JDK 17+) idioms.";
-        
-        String escapedSystem = finalSystemPrompt.replace("\"", "\\\"").replace("\n", "\\n");
-        String escapedUser = userPrompt.replace("\"", "\\\"").replace("\n", "\\n");
+        Map<String, Object> bodyMap = new HashMap<>();
+        bodyMap.put("model", model);
+        bodyMap.put("temperature", 0.2);
+        bodyMap.put("max_tokens", 4096);
 
-        String body = """
-        {
-          "model": "%s",
-          "messages":[
-            {"role":"system","content":"%s"},
-            {"role":"user","content":"%s"}
-          ],
-          "temperature": 0.2,
-          "max_tokens": 4096
-        }
-        """.formatted(model, escapedSystem, escapedUser);
+        List<Map<String, String>> messages = new ArrayList<>();
+        Map<String, String> systemMsg = new HashMap<>();
+        systemMsg.put("role", "system");
+        systemMsg.put("content", systemPrompt != null ? systemPrompt : "You are an elite Java DSA Architect and Mentor. Provide clean, professional, and efficient Java-centric solutions. Always prioritize modern Java (JDK 17+) idioms.");
+        messages.add(systemMsg);
+
+        Map<String, String> userMsg = new HashMap<>();
+        userMsg.put("role", "user");
+        userMsg.put("content", userPrompt);
+        messages.add(userMsg);
+
+        bodyMap.put("messages", messages);
+
+        byte[] bodyBytes = mapper.writeValueAsBytes(bodyMap);
 
         try (OutputStream os = conn.getOutputStream()) {
-            os.write(body.getBytes());
+            os.write(bodyBytes);
         }
 
         InputStream stream = conn.getResponseCode() < 300
@@ -63,7 +72,6 @@ public class GroqService {
                 : conn.getErrorStream();
 
         String response = new String(stream.readAllBytes());
-        ObjectMapper mapper = new ObjectMapper();
         JsonNode root = mapper.readTree(response);
 
         if (root.has("error")) {

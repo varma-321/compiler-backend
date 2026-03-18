@@ -40,9 +40,6 @@ public class CodeExecutionService {
 
             Path dir = Files.createTempDirectory("java_exec");
 
-            // Find the PUBLIC class in the final code — that must match the file name.
-            // The SubmissionService harness generates "public class Main", so we must
-            // look at executableCode (not the raw user code) to find the right name.
             String className = "Main";
             java.util.regex.Matcher pubMatcher = java.util.regex.Pattern
                     .compile("public\\s+class\\s+([A-Za-z0-9_]+)")
@@ -54,38 +51,56 @@ public class CodeExecutionService {
             Path file = dir.resolve(className + ".java");
             Files.writeString(file, executableCode);
 
-            Process compile = new ProcessBuilder("javac", className + ".java")
-                    .directory(dir.toFile())
-                    .redirectErrorStream(false)
-                    .start();
-
-            compile.waitFor();
-
-            if (compile.exitValue() != 0) {
-                String error = new String(compile.getErrorStream().readAllBytes());
-                result.put("success", false);
-                result.put("error", error);
+            javax.tools.JavaCompiler compiler = javax.tools.ToolProvider.getSystemJavaCompiler();
+            if (compiler == null) {
+                // Fallback to ProcessBuilder if SystemJavaCompiler is unavailable
+                Process compile = new ProcessBuilder("javac", "-g:none", className + ".java").directory(dir.toFile()).start();
+                compile.waitFor();
+                if (compile.exitValue() != 0) {
+                    result.put("success", false);
+                    result.put("error", new String(compile.getErrorStream().readAllBytes()));
+                    return result;
+                }
+                Process run = new ProcessBuilder("java", "-XX:TieredStopAtLevel=1", "-cp", dir.toString(), className).directory(dir.toFile()).start();
+                run.waitFor(10, java.util.concurrent.TimeUnit.SECONDS);
+                result.put("success", run.exitValue() == 0);
+                result.put("output", new String(run.getInputStream().readAllBytes()));
                 return result;
             }
 
-            Process run = new ProcessBuilder("java", "-cp", dir.toString(), className)
-                    .directory(dir.toFile())
-                    .redirectErrorStream(true)
-                    .start();
-
-            // Time‑limit: 10 seconds
-            boolean finished = run.waitFor(10, java.util.concurrent.TimeUnit.SECONDS);
-            if (!finished) {
-                run.destroyForcibly();
+            ByteArrayOutputStream errStream = new ByteArrayOutputStream();
+            int compRes = compiler.run(null, null, errStream, file.toString());
+            if (compRes != 0) {
                 result.put("success", false);
-                result.put("error", "Time Limit Exceeded (10s)");
+                result.put("error", errStream.toString());
                 return result;
             }
 
-            String output = new String(run.getInputStream().readAllBytes());
+            // Execute using reflection
+            try (java.net.URLClassLoader classLoader = java.net.URLClassLoader.newInstance(new java.net.URL[]{dir.toUri().toURL()})) {
+                Class<?> cls = Class.forName(className, true, classLoader);
+                java.lang.reflect.Method mainMethod = cls.getMethod("main", String[].class);
 
-            result.put("success", true);
-            result.put("output", output);
+                // Redirect System.out
+                PrintStream originalOut = System.out;
+                ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+                PrintStream customOut = new PrintStream(outputStream);
+                System.setOut(customOut);
+
+                try {
+                    mainMethod.invoke(null, (Object) new String[]{});
+                } catch (java.lang.reflect.InvocationTargetException e) {
+                    result.put("success", false);
+                    result.put("error", e.getCause().toString());
+                    System.setOut(originalOut);
+                    return result;
+                } finally {
+                    System.setOut(originalOut);
+                }
+
+                result.put("success", true);
+                result.put("output", outputStream.toString());
+            }
 
         } catch (Exception e) {
             result.put("success", false);

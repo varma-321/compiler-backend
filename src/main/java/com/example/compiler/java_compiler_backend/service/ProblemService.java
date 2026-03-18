@@ -32,19 +32,8 @@ public class ProblemService {
     }
 
     public ProblemResponseDTO getProblemByKey(String key, String title) throws Exception {
-        Problem problem = problemRepository.findByKey(key)
-                .or(() -> {
-                     String cleanTitle = key.replaceAll("-", " ").trim();
-                     return problemRepository.findAll().stream()
-                             .filter(p -> p.getTitle().equalsIgnoreCase(cleanTitle) || p.getKey().contains(key) || key.contains(p.getKey()))
-                             .findFirst();
-                })
-                .orElse(null);
+        Problem problem = getOrCreateProblem(key, title);
 
-        if (problem == null) {
-            String sanitizedTitle = (title != null && !title.isEmpty()) ? title : key.replaceAll("-", " ");
-            problem = generateAndSaveProblem(key, sanitizedTitle);
-        }
 
         List<TestCase> visibleCases = testCaseRepository.findByProblemIdAndIsHiddenFalse(problem.getId());
 
@@ -78,6 +67,24 @@ public class ProblemService {
         dto.setTestCases(tcDtos);
 
         return dto;
+    }
+
+    @Transactional
+    public Problem getOrCreateProblem(String key, String title) throws Exception {
+        Problem problem = problemRepository.findByKey(key)
+                .or(() -> {
+                    String cleanTitle = key.replaceAll("-", " ").trim();
+                    return problemRepository.findAll().stream()
+                            .filter(p -> p.getTitle().equalsIgnoreCase(cleanTitle) || p.getKey().contains(key) || key.contains(p.getKey()))
+                            .findFirst();
+                })
+                .orElse(null);
+
+        if (problem == null) {
+            String sanitizedTitle = (title != null && !title.isEmpty()) ? title : key.replaceAll("-", " ");
+            problem = generateAndSaveProblem(key, sanitizedTitle);
+        }
+        return problem;
     }
 
     @PostConstruct
@@ -226,7 +233,7 @@ public class ProblemService {
         p = problemRepository.save(p);
 
         JsonNode cases = root.path("testCases");
-        if (cases.isArray()) {
+        if (cases != null && cases.isArray() && cases.size() > 0) {
             for (JsonNode node : cases) {
                 TestCase t = new TestCase();
                 t.setProblem(p);
@@ -236,6 +243,9 @@ public class ProblemService {
                 t.setExplanation(node.path("explanation").asText(null));
                 testCaseRepository.save(t);
             }
+        } else {
+            System.out.println("⚠️ Warning: No test cases generated for " + title);
+            throw new RuntimeException("AI failed to generate test cases for: " + title);
         }
         return p;
     }

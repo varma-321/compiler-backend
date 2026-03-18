@@ -11,7 +11,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
-import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -20,353 +19,197 @@ public class SubmissionService {
     private final ProblemRepository problemRepository;
     private final TestCaseRepository testCaseRepository;
     private final CodeExecutionService codeExecutionService;
+    private final ProblemService problemService;
     private final ObjectMapper objectMapper;
-
-    // Thread pool: one thread per logical CPU, cap at 8 for safety
-    private final ExecutorService pool = Executors.newFixedThreadPool(
-        Math.min(Runtime.getRuntime().availableProcessors(), 8)
-    );
 
     public SubmissionService(ProblemRepository problemRepository,
                              TestCaseRepository testCaseRepository,
-                             CodeExecutionService codeExecutionService) {
+                             CodeExecutionService codeExecutionService,
+                             ProblemService problemService) {
         this.problemRepository = problemRepository;
         this.testCaseRepository = testCaseRepository;
         this.codeExecutionService = codeExecutionService;
+        this.problemService = problemService;
         this.objectMapper = new ObjectMapper();
     }
 
     public SubmissionResponseDTO submitCode(String problemKey, String userCode, boolean runAllTests) throws Exception {
-        Problem problem = problemRepository.findByKey(problemKey)
-                .orElseThrow(() -> new RuntimeException("Problem not found: " + problemKey));
+        try {
+            Problem problem = problemService.getOrCreateProblem(problemKey, null);
 
-        List<TestCase> testCases = runAllTests
-                ? testCaseRepository.findByProblemId(problem.getId())
-                : testCaseRepository.findByProblemIdAndIsHiddenFalse(problem.getId());
+            List<TestCase> testCases = runAllTests
+                    ? testCaseRepository.findByProblemId(problem.getId())
+                    : testCaseRepository.findByProblemIdAndIsHiddenFalse(problem.getId());
 
-        if (testCases.isEmpty()) {
-            throw new RuntimeException("No test cases found for problem.");
-        }
+            if (testCases == null || testCases.isEmpty()) {
+                throw new RuntimeException("No test cases found for problem ID: " + problem.getId());
+            }
 
-        Map<String, Object> methodSig = null;
-        if (problem.getMethodSignature() != null) {
-            methodSig = objectMapper.readValue(problem.getMethodSignature(), new TypeReference<>() {});
-        }
+            Map<String, Object> methodSig = null;
+            if (problem.getMethodSignature() != null && !problem.getMethodSignature().isEmpty()) {
+                try {
+                    methodSig = objectMapper.readValue(problem.getMethodSignature(), new TypeReference<Map<String, Object>>() {});
+                } catch (Exception e) {
+                    System.err.println("Error parsing method signature for problem " + problemKey + ": " + e.getMessage());
+                }
+            }
 
-        final Map<String, Object> finalMethodSig = methodSig;
+            final Map<String, Object> finalMethodSig = methodSig;
 
-        // ── Compile ONCE (dry-run with first test) to catch compilation errors fast ────
-        // We do this before spinning up the thread pool so we don't waste threads on
-        // definitely-bad code.
-        {
-            // ── Compile ONCE (dry-run with first test) ─────────────────────────────
-            Map<String, String> firstInputs = parseInputs(testCases.get(0).getInputs());
-            String probe = buildTestWrapper(userCode, problem.getTitle(), firstInputs, finalMethodSig);
-            Map<String, Object> probeResult = codeExecutionService.runJava(probe);
-            if (!(Boolean) probeResult.get("success")) {
-                // Compilation / runtime error: return immediately
+            // ── Execute All Test Cases in One Run ──
+            long wallStart = System.currentTimeMillis();
+            List<Map<String, String>> allInputs = new ArrayList<>();
+            for (TestCase tc : testCases) {
+                allInputs.add(parseInputs(tc.getInputs()));
+            }
+
+            String batchWrapped = buildBatchTestWrapper(userCode, allInputs, finalMethodSig);
+            Map<String, Object> batchResult = codeExecutionService.runJava(batchWrapped);
+
+            if (batchResult == null || !(Boolean) batchResult.get("success")) {
                 SubmissionResponseDTO err = new SubmissionResponseDTO();
                 err.setSuccess(false);
                 err.setPassedTests(0);
                 err.setTotalTests(testCases.size());
-                err.setExecutionTimeMs(0L);
-                String errorText = (String) probeResult.get("error");
+                String errorText = batchResult != null ? (String) batchResult.get("error") : "Execution failed";
                 err.setStatus(errorText != null && errorText.contains("Exception") ? "RUNTIME_ERROR" : "COMPILATION_ERROR");
-                err.setMessage(errorText != null ? errorText : "Compilation failed");
-
-                TestCaseResultDTO tr = new TestCaseResultDTO();
-                tr.setTest(1);
-                tr.setExpected(testCases.get(0).getExpectedOutput());
-                tr.setHidden(testCases.get(0).isHidden());
-                tr.setStatus("FAILED");
-                tr.setActual("Error:\n" + errorText);
-                // Show input for failed visible case
-                if (!testCases.get(0).isHidden()) {
-                    tr.setInput(firstInputs.toString());
-                }
-                err.setResults(List.of(tr));
+                err.setMessage(errorText);
                 return err;
             }
-        }
 
-        // ── Run all test cases in parallel ────────────────────────────────────────────
-        long wallStart = System.currentTimeMillis();
+            String fullOutput = (String) batchResult.get("output");
+            String[] caseOutputs = fullOutput.split("---CASE_SEPARATOR---");
 
-        List<Future<TestCaseResultDTO>> futures = new ArrayList<>();
-        for (int i = 0; i < testCases.size(); i++) {
-            final int idx = i;
-            final TestCase tc = testCases.get(i);
-            futures.add(pool.submit(() -> {
-                try {
-                    // ── Robustly parse inputs: values may be JSON strings or raw JSON arrays
-                    Map<String, String> inputsMap = parseInputs(tc.getInputs());
-                    String wrapped = buildTestWrapper(userCode, problem.getTitle(), inputsMap, finalMethodSig);
-                    Map<String, Object> result = codeExecutionService.runJava(wrapped);
+            List<TestCaseResultDTO> results = new ArrayList<>();
+            int passed = 0;
+            TestCaseResultDTO firstFailure = null;
 
-                    TestCaseResultDTO tr = new TestCaseResultDTO();
-                    tr.setTest(idx + 1);
-                    tr.setExpected(tc.getExpectedOutput());
-                    tr.setHidden(tc.isHidden());
+            for (int i = 0; i < testCases.size(); i++) {
+                TestCase tc = testCases.get(i);
+                TestCaseResultDTO tr = new TestCaseResultDTO();
+                tr.setTest(i + 1);
+                tr.setExpected(tc.getExpectedOutput());
+                tr.setHidden(tc.isHidden());
 
-                    if (!(Boolean) result.get("success")) {
-                        tr.setStatus("FAILED");
-                        tr.setActual("Runtime Error:\n" + result.get("error"));
-                        if (!tc.isHidden()) {
-                            tr.setInput(inputsMap.toString());
-                            tr.setExplanation(tc.getExplanation());
-                        }
-                    } else {
-                        String actual = ((String) result.get("output")).trim();
-                        String expected = tc.getExpectedOutput().trim();
-                        tr.setActual(actual);
-                        if (normalize(actual).equals(normalize(expected))) {
-                            tr.setStatus("PASSED");
-                        } else {
-                            tr.setStatus("FAILED");
-                            // Always expose input/explanation for failed cases (visible or hidden)
-                            tr.setInput(inputsMap.toString());
-                            if (tc.getExplanation() != null) tr.setExplanation(tc.getExplanation());
-                        }
-                    }
-                    return tr;
-                } catch (Exception e) {
-                    TestCaseResultDTO tr = new TestCaseResultDTO();
-                    tr.setTest(idx + 1);
-                    tr.setExpected(tc.getExpectedOutput());
-                    tr.setHidden(tc.isHidden());
+                String actual = (i < caseOutputs.length) ? caseOutputs[i].trim() : "";
+                tr.setActual(actual);
+
+                if (normalize(actual).equals(normalize(tc.getExpectedOutput()))) {
+                    tr.setStatus("PASSED");
+                    passed++;
+                } else {
                     tr.setStatus("FAILED");
-                    tr.setActual("Error: " + e.getMessage());
-                    return tr;
+                    tr.setInput(allInputs.get(i).toString());
+                    if (firstFailure == null) firstFailure = tr;
                 }
-            }));
-        }
-
-        // Collect results in order
-        List<TestCaseResultDTO> results = new ArrayList<>();
-        int passed = 0;
-        TestCaseResultDTO firstFailure = null;
-
-        for (Future<TestCaseResultDTO> future : futures) {
-            TestCaseResultDTO tr = future.get(30, TimeUnit.SECONDS);
-            results.add(tr);
-            if ("PASSED".equals(tr.getStatus())) {
-                passed++;
-            } else if (firstFailure == null) {
-                firstFailure = tr;
+                results.add(tr);
             }
-        }
 
-        long wallTime = System.currentTimeMillis() - wallStart;
+            SubmissionResponseDTO response = new SubmissionResponseDTO();
+            response.setPassedTests(passed);
+            response.setTotalTests(testCases.size());
+            response.setExecutionTimeMs(System.currentTimeMillis() - wallStart);
 
-        // ── Build response ────────────────────────────────────────────────────────────
-        SubmissionResponseDTO response = new SubmissionResponseDTO();
-        response.setPassedTests(passed);
-        response.setTotalTests(testCases.size());
-        response.setExecutionTimeMs(wallTime);
-
-        if (firstFailure == null) {
-            response.setSuccess(true);
-            response.setStatus("ACCEPTED");
-            response.setMessage("All " + passed + " test cases passed!");
-            // Return only visible results when all pass (don't leak hidden inputs)
-            response.setResults(results.stream().filter(r -> !r.isHidden()).collect(Collectors.toList()));
-        } else {
-            response.setSuccess(false);
-            // Return ALL results so the UI can show which ones failed, plus first failure details
-            response.setResults(results);
-
-            String failActual = firstFailure.getActual() != null ? firstFailure.getActual() : "";
-            if (failActual.contains("Runtime Error") || failActual.contains("Exception")) {
-                response.setStatus("RUNTIME_ERROR");
+            if (firstFailure == null) {
+                response.setSuccess(true);
+                response.setStatus("ACCEPTED");
+                response.setMessage("All " + passed + " test cases passed!");
+                response.setResults(results.stream().filter(r -> !r.isHidden()).collect(Collectors.toList()));
             } else {
+                response.setSuccess(false);
+                response.setResults(results);
                 response.setStatus("WRONG_ANSWER");
+                response.setMessage("Failed on test " + firstFailure.getTest() + " — passed " + passed + "/" + testCases.size());
             }
-            response.setMessage("Failed on test " + firstFailure.getTest() +
-                    " — passed " + passed + "/" + testCases.size());
+
+            return response;
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw e;
         }
-
-        return response;
     }
-
-    // ─── Normalization ────────────────────────────────────────────────────────────
 
     private String normalize(String s) {
-        String trimmed = s.trim();
-        if (trimmed.matches("^\\[[\\s\\S]*\\]$")) {
-            String noOuterSpace = trimmed.replaceAll("\\s*\\[\\s*", "[").replaceAll("\\s*\\]\\s*", "]");
-            String compactCommas = noOuterSpace.replaceAll(",\\s+", ",");
-            return compactCommas.toLowerCase();
-        }
-        return trimmed.replaceAll("\\s+", " ").toLowerCase();
+        if (s == null) return "";
+        // Remove all whitespace for robust comparison of arrays and objects
+        return s.replaceAll("\\s+", "").toLowerCase();
     }
 
-    // ─── Test wrapper builder ─────────────────────────────────────────────────────
-
-    private String buildTestWrapper(String userCode, String problemTitle,
-                                    Map<String, String> inputs, Map<String, Object> methodSig) {
+    private String buildBatchTestWrapper(String userCode, List<Map<String, String>> allInputs, Map<String, Object> methodSig) {
         String userClass = userCode.trim().replaceAll("^public\\s+class\\s+", "class ");
-
-        StringBuilder varDecls = new StringBuilder();
-        StringBuilder methodCall = new StringBuilder();
+        StringBuilder casesBody = new StringBuilder();
 
         if (methodSig != null) {
-            @SuppressWarnings("unchecked")
             List<Map<String, String>> params = (List<Map<String, String>>) methodSig.get("params");
             String returnType = (String) methodSig.get("returnType");
-            Object isStaticObj = methodSig.get("isStatic");
-            boolean isStatic = isStaticObj instanceof Boolean ? (Boolean) isStaticObj : false;
+            boolean isStatic = methodSig.get("isStatic") instanceof Boolean && (Boolean) methodSig.get("isStatic");
             String methodName = (String) methodSig.get("name");
 
-            List<String> argNames = new ArrayList<>();
-            for (Map<String, String> param : params) {
-                String pType = param.get("type");
-                String pName = param.get("name");
-                String val = inputs.getOrDefault(pName, getDefaultForType(pType));
-                val = toJavaLiteral(val, pType);
-                varDecls.append(String.format("            %s %s = %s;\n", pType, pName, val));
-                argNames.add(pName);
-            }
-
-            String argsStr = String.join(", ", argNames);
-            String caller = isStatic ? "Solution." + methodName : "new Solution()." + methodName;
-
-            if ("void".equals(returnType)) {
-                methodCall.append(String.format("            %s(%s);\n", caller, argsStr));
-                methodCall.append("            System.out.println(\"void\");\n");
-            } else {
-                methodCall.append(String.format("            %s result = %s(%s);\n", returnType, caller, argsStr));
-                methodCall.append("            ").append(buildOutputPrint(returnType)).append("\n");
-            }
-        } else {
-            methodCall.append("            System.out.println(\"ERROR: Method signature missing.\");\n");
-        }
-
-        return "import java.util.*;\nimport java.io.*;\nimport java.math.*;\n" +
-                userClass + "\n\n" +
-                "public class Main {\n" +
-                "    public static void main(String[] args) {\n" +
-                "        try {\n" +
-                varDecls +
-                methodCall +
-                "        } catch (Exception e) {\n" +
-                "            System.out.println(\"ERROR: \" + e.getMessage());\n" +
-                "            e.printStackTrace();\n" +
-                "        }\n" +
-                "    }\n" +
-                "}\n";
-    }
-
-    private String toJavaLiteral(String v, String javaType) {
-        v = v.trim();
-        return switch (javaType) {
-            case "int" -> {
-                try { yield String.valueOf(Integer.parseInt(v)); } 
-                catch (NumberFormatException e) { yield "0"; }
-            }
-            case "double" -> {
-                try { yield String.valueOf(Double.parseDouble(v)); }
-                catch (NumberFormatException e) { yield "0.0"; }
-            }
-            case "boolean" -> v.equals("true") ? "true" : "false";
-            case "long" -> v.endsWith("L") ? v : v.replaceAll("[^0-9\\-]", "") + "L";
-            case "float" -> v.endsWith("f") ? v : v + "f";
-            case "String" -> v.startsWith("\"") && v.endsWith("\"") ? v : "\"" + v.replace("\"", "\\\"") + "\"";
-            case "int[]" -> {
-                // Input like "[5,4,3,2,1]" or "5,4,3,2,1" -> new int[]{5,4,3,2,1}
-                String inner = v.startsWith("[") ? v.substring(1, v.length() - 1) : v;
-                yield "new int[]{" + inner + "}";
-            }
-            case "long[]" -> {
-                String inner = v.startsWith("[") ? v.substring(1, v.length() - 1) : v;
-                yield "new long[]{" + inner + "L" + "}";
-            }
-            case "double[]" -> {
-                String inner = v.startsWith("[") ? v.substring(1, v.length() - 1) : v;
-                yield "new double[]{" + inner + "}";
-            }
-            case "String[]" -> {
-                String inner = v.startsWith("[") ? v.substring(1, v.length() - 1) : v;
-                // Wrap each element in quotes if not already
-                String[] parts = inner.split(",");
-                StringBuilder sb = new StringBuilder("new String[]{");
-                for (int i = 0; i < parts.length; i++) {
-                    String p = parts[i].trim().replaceAll("\"", "");
-                    sb.append("\"").append(p).append("\"");
-                    if (i < parts.length - 1) sb.append(", ");
+            for (int i = 0; i < allInputs.size(); i++) {
+                Map<String, String> inputs = allInputs.get(i);
+                casesBody.append("        try {\n");
+                List<String> argNames = new ArrayList<>();
+                if (params != null) {
+                    for (Map<String, String> param : params) {
+                        String pType = param.get("type");
+                        String pName = param.get("name");
+                        String val = toJavaLiteral(inputs.getOrDefault(pName, getDefaultForType(pType)), pType);
+                        casesBody.append(String.format("            %s %s = %s;\n", pType, pName, val));
+                        argNames.add(pName);
+                    }
                 }
-                sb.append("}");
-                yield sb.toString();
-            }
-            case "int[][]" -> {
-                // Input like "[[1,2],[3,4]]" -> new int[][]{{1,2},{3,4}}
-                yield "new int[][]" + v.replace("[", "{").replace("]", "}");
-            }
-            case "List<Integer>" -> {
-                String inner = v.startsWith("[") ? v.substring(1, v.length() - 1) : v;
-                yield "new java.util.ArrayList<>(java.util.Arrays.asList(" + 
-                      java.util.Arrays.stream(inner.split(",")).map(s -> s.trim()).collect(java.util.stream.Collectors.joining(",")) +
-                      "))";
-            }
-            case "List<String>" -> {
-                String inner = v.startsWith("[") ? v.substring(1, v.length() - 1) : v;
-                String[] parts = inner.split(",");
-                StringBuilder sb = new StringBuilder("new java.util.ArrayList<>(java.util.Arrays.asList(");
-                for (int i = 0; i < parts.length; i++) {
-                    String p = parts[i].trim().replaceAll("\"", "");
-                    sb.append("\"").append(p).append("\"");
-                    if (i < parts.length - 1) sb.append(", ");
+
+                String caller = isStatic ? "Solution." + methodName : "new Solution()." + methodName;
+                if ("void".equals(returnType)) {
+                    casesBody.append(String.format("            %s(%s);\n", caller, String.join(", ", argNames)));
+                    casesBody.append("            System.out.println(\"void\");\n");
+                } else {
+                    casesBody.append("            Object result = ").append(caller).append("(").append(String.join(", ", argNames)).append(");\n");
+                    casesBody.append("            if (result == null) System.out.println(\"null\");\n");
+                    casesBody.append("            else if (result instanceof int[]) System.out.println(java.util.Arrays.toString((int[]) result));\n");
+                    casesBody.append("            else if (result instanceof long[]) System.out.println(java.util.Arrays.toString((long[]) result));\n");
+                    casesBody.append("            else if (result instanceof String[]) System.out.println(java.util.Arrays.toString((String[]) result));\n");
+                    casesBody.append("            else if (result.getClass().isArray()) System.out.println(java.util.Arrays.deepToString((Object[]) result));\n");
+                    casesBody.append("            else System.out.println(result);\n");
                 }
-                sb.append("))");
-                yield sb.toString();
+                casesBody.append("        } catch (Exception e) { e.printStackTrace(); }\n");
+                if (i < allInputs.size() - 1) {
+                    casesBody.append("        System.out.println(\"---CASE_SEPARATOR---\");\n");
+                }
             }
-            default -> {
-                // For TreeNode, ListNode etc. just pass null or the value as-is
-                if (v.equals("null")) yield "null";
-                if (v.startsWith("[")) yield "null"; // Tree/Linked List structures unsupported in raw executor
-                if (v.startsWith("\"") && v.endsWith("\"")) yield v;
-                yield "\"" + v + "\"";
-            }
-        };
+        }
+
+        return "import java.util.*;\nimport java.io.*;\nimport java.util.Arrays;\n" + userClass + "\n" +
+               "public class Main {\n" +
+               "    public static void main(String[] args) {\n" +
+               casesBody.toString() +
+               "    }\n" +
+               "}";
     }
 
-    private String getDefaultForType(String javaType) {
-        if (javaType.contains("[]")) return "new " + javaType + "{}";
-        return switch (javaType) {
-            case "int" -> "0";
-            case "long" -> "0L";
-            case "double" -> "0.0";
-            case "boolean" -> "false";
-            case "String" -> "\"\"";
-            default -> "null";
-        };
+    private String toJavaLiteral(String v, String type) {
+        if (v == null || v.equals("null")) return "null";
+        if (type == null) return "\"" + v + "\"";
+        if (type.equals("String")) return "\"" + v.replace("\"", "\\\"") + "\"";
+        if (type.equals("int[]")) return "new int[]{" + v.replace("[", "").replace("]", "") + "}";
+        if (type.equals("long[]")) return "new long[]{" + v.replace("[", "").replace("]", "") + "}";
+        return v;
     }
 
-    private String buildOutputPrint(String returnType) {
-        if (returnType.endsWith("[]") && !returnType.endsWith("[][]")) {
-            return "System.out.println(java.util.Arrays.toString(result));";
-        }
-        if (returnType.endsWith("[][]")) {
-            return "System.out.println(java.util.Arrays.deepToString(result));";
-        }
-        return "System.out.println(result);";
+    private String getDefaultForType(String type) {
+        if (type == null) return "null";
+        if (type.equals("int")) return "0";
+        if (type.equals("boolean")) return "false";
+        return "null";
     }
-    /**
-     * Robustly convert stored test-case inputs JSON to Map<String,String>.
-     * The AI may store values as quoted strings OR as raw JSON arrays/objects.
-     * We stringify everything so the downstream code always gets a plain String.
-     */
+
     private Map<String, String> parseInputs(String json) throws Exception {
-        Map<String, Object> raw = objectMapper.readValue(json, new TypeReference<>() {});
+        if (json == null || json.isEmpty()) return new LinkedHashMap<>();
+        Map<String, Object> raw = objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
         Map<String, String> result = new LinkedHashMap<>();
-        for (Map.Entry<String, Object> e : raw.entrySet()) {
-            Object v = e.getValue();
-            if (v == null) {
-                result.put(e.getKey(), "null");
-            } else if (v instanceof String) {
-                result.put(e.getKey(), (String) v);
-            } else {
-                // List, Integer, Boolean, etc. — serialize back to JSON-like string
-                result.put(e.getKey(), objectMapper.writeValueAsString(v));
+        if (raw != null) {
+            for (Map.Entry<String, Object> e : raw.entrySet()) {
+                result.put(e.getKey(), e.getValue() == null ? "null" : e.getValue().toString());
             }
         }
         return result;
