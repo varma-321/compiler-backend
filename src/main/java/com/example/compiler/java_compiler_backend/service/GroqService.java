@@ -137,6 +137,7 @@ public class GroqService {
         4. 'testCases' must have EXACTLY 3 visible and 2 hidden cases.
         5. For problems like "Evaluate Reverse Polish Notation", use the standard signature: public int evalRPN(String[] tokens).
         6. All newlines inside strings MUST be escaped as \\n.
+        7. CRITICAL: NEVER use "null" or any reserved keywords as a method name. If the method name is unclear or unavailable, default to "solve".
         
         STRUCTURE:
         {

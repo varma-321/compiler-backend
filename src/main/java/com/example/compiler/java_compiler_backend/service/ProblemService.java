@@ -106,7 +106,24 @@ public class ProblemService {
         seedStockBuyAndSell();
         seedKadanesAlgorithm();
         seedMajorityElementN2();
-        System.out.println("✅ Database seed complete.");
+        
+        // Auto-repair existing broken problems where the AI generated "null" as the method name
+        List<Problem> badProblems = problemRepository.findAll().stream()
+            .filter(p -> p.getMethodSignature() != null && p.getMethodSignature().contains("\"name\":\"null\""))
+            .collect(Collectors.toList());
+            
+        for (Problem p : badProblems) {
+            p.setMethodSignature(p.getMethodSignature().replace("\"name\":\"null\"", "\"name\":\"solve\""));
+            if (p.getStarterCode() != null) {
+                p.setStarterCode(p.getStarterCode().replace(" null(", " solve(").replace(" null (", " solve("));
+            }
+        }
+        if (!badProblems.isEmpty()) {
+            problemRepository.saveAll(badProblems);
+            System.out.println("🔧 Auto-repaired " + badProblems.size() + " problems with 'null' method names.");
+        }
+        
+        System.out.println("✅ Database seed and repair complete.");
     }
 
     private Problem newProblem(String key, String title, String difficulty, String topic,
