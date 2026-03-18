@@ -90,6 +90,15 @@ public class ProblemService {
     @PostConstruct
     @Transactional
     public void seedDatabase() {
+        // Force re-seed of problems with empty signatures
+        List<Problem> emptySigProblems = problemRepository.findAll().stream()
+            .filter(p -> p.getMethodSignature() != null && p.getMethodSignature().equals("{}"))
+            .collect(Collectors.toList());
+        if (!emptySigProblems.isEmpty()) {
+            problemRepository.deleteAll(emptySigProblems);
+            System.out.println("🔧 Deleted " + emptySigProblems.size() + " problems with '{}' signatures to reseed them.");
+        }
+
         seedTwoSum();
         seedContainsDuplicate();
         seedValidAnagram();
