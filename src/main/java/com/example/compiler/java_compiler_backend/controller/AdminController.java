@@ -68,4 +68,9 @@ public class AdminController {
             "stats", Map.of("usersActive", 42)
         ));
     }
+
+    @GetMapping("/health-check")
+    public String health(){
+        return "Healthy";
+    }
 }
