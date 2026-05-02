@@ -7,6 +7,7 @@ public class CodeRequest {
     private String type;
     private String problemId;
     private String inputs;
+    private String stdin;
 
     public CodeRequest() {
     }
@@ -15,43 +16,21 @@ public class CodeRequest {
         this.code = code;
     }
 
-    public String getCode() {
-        return code;
-    }
+    public String getCode() { return code; }
+    public void setCode(String code) { this.code = code; }
 
-    public void setCode(String code) {
-        this.code = code;
-    }
+    public Integer getHintLevel() { return hintLevel; }
+    public void setHintLevel(Integer hintLevel) { this.hintLevel = hintLevel; }
 
-    public Integer getHintLevel() {
-        return hintLevel;
-    }
+    public String getType() { return type; }
+    public void setType(String type) { this.type = type; }
 
-    public void setHintLevel(Integer hintLevel) {
-        this.hintLevel = hintLevel;
-    }
+    public String getProblemId() { return problemId; }
+    public void setProblemId(String problemId) { this.problemId = problemId; }
 
-    public String getType() {
-        return type;
-    }
+    public String getInputs() { return inputs; }
+    public void setInputs(String inputs) { this.inputs = inputs; }
 
-    public void setType(String type) {
-        this.type = type;
-    }
-
-    public String getProblemId() {
-        return problemId;
-    }
-
-    public void setProblemId(String problemId) {
-        this.problemId = problemId;
-    }
-
-    public String getInputs() {
-        return inputs;
-    }
-
-    public void setInputs(String inputs) {
-        this.inputs = inputs;
-    }
-}
+    public String getStdin() { return stdin; }
+    public void setStdin(String stdin) { this.stdin = stdin; }
+}

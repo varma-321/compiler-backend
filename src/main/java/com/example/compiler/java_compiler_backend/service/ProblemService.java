@@ -164,16 +164,12 @@ public class ProblemService {
     }
 
     private void seedTwoSum() {
-        Problem p = newProblem("lc-hm-6", "Two Sum", "Easy", "Arrays",
+        Problem p = newProblem("lc-hm-6,arr-19,two-sum", "Two Sum", "Easy", "Arrays",
             "Indices of two numbers adding up to target.",
             "class Solution {\n    public int[] twoSum(int[] nums, int target) {\n        \n    }\n}",
             "{\"name\":\"twoSum\",\"returnType\":\"int[]\",\"params\":[{\"type\":\"int[]\",\"name\":\"nums\"},{\"type\":\"int\",\"name\":\"target\"}],\"isStatic\":false}",
             "[\"Use a HashMap.\"]",
             "O(N) with HashMap.");
-        if (p != null) {
-            p.setKey("lc-hm-6,arr-19,two-sum");
-            problemRepository.save(p);
-        }
         tc(p, "{\"nums\":\"[2,7,11,15]\",\"target\":\"9\"}", "[0, 1]", false, null);
     }
 

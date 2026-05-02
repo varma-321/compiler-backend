@@ -1,7 +1,5 @@
 package com.example.compiler.java_compiler_backend.controller;
 
-
-
 import com.example.compiler.java_compiler_backend.model.CodeRequest;
 import com.example.compiler.java_compiler_backend.service.CodeExecutionService;
 import org.springframework.web.bind.annotation.*;
@@ -20,7 +18,6 @@ public class CodeController {
 
     @PostMapping("/run-java")
     public Map<String,Object> run(@RequestBody CodeRequest req) {
-
-        return executor.runJava(req.getCode());
+        return executor.runJava(req.getCode(), req.getStdin());
     }
-}
+}
