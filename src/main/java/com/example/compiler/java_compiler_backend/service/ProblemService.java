@@ -91,12 +91,13 @@ public class ProblemService {
     @Transactional
     public void seedDatabase() {
         // Force re-seed of problems with empty signatures
-        List<Problem> emptySigProblems = problemRepository.findAll().stream()
-            .filter(p -> p.getMethodSignature() != null && p.getMethodSignature().equals("{}"))
+        List<Problem> refreshProblems = problemRepository.findAll().stream()
+            .filter(p -> (p.getMethodSignature() != null && p.getMethodSignature().equals("{}")) || 
+                         (p.getDescription() != null && p.getDescription().length() < 100))
             .collect(Collectors.toList());
-        if (!emptySigProblems.isEmpty()) {
-            problemRepository.deleteAll(emptySigProblems);
-            System.out.println("🔧 Deleted " + emptySigProblems.size() + " problems with '{}' signatures to reseed them.");
+        if (!refreshProblems.isEmpty()) {
+            problemRepository.deleteAll(refreshProblems);
+            System.out.println("🔧 Deleted " + refreshProblems.size() + " problems with short/missing data to reseed them.");
         }
 
         seedTwoSum();
@@ -164,11 +165,25 @@ public class ProblemService {
     }
 
     private void seedTwoSum() {
-        Problem p = newProblem("lc-hm-6,arr-19,two-sum", "Two Sum", "Easy", "Arrays",
-            "Indices of two numbers adding up to target.",
+        Problem p = newProblem("nc-ah-3,lc-hm-6,arr-19,two-sum", "Two Sum", "Easy", "Arrays",
+            "Given an array of integers `nums` and an integer `target`, return *indices of the two numbers such that they add up to target*.\n\n" +
+            "You may assume that each input would have **exactly one solution**, and you may not use the same element twice.\n\n" +
+            "You can return the answer in any order.\n\n" +
+            "### Example 1:\n" +
+            "**Input:** nums = [2,7,11,15], target = 9\n" +
+            "**Output:** [0,1]\n" +
+            "**Explanation:** Because nums[0] + nums[1] == 9, we return [0, 1].\n\n" +
+            "### Example 2:\n" +
+            "**Input:** nums = [3,2,4], target = 6\n" +
+            "**Output:** [1,2]\n\n" +
+            "### Constraints:\n" +
+            "- `2 <= nums.length <= 10^4` \n" +
+            "- `-10^9 <= nums[i] <= 10^9` \n" +
+            "- `-10^9 <= target <= 10^9` \n" +
+            "- **Only one valid answer exists.**",
             "class Solution {\n    public int[] twoSum(int[] nums, int target) {\n        \n    }\n}",
             "{\"name\":\"twoSum\",\"returnType\":\"int[]\",\"params\":[{\"type\":\"int[]\",\"name\":\"nums\"},{\"type\":\"int\",\"name\":\"target\"}],\"isStatic\":false}",
-            "[\"Use a HashMap.\"]",
+            "[\"Use a HashMap to store the complement.\"]",
             "O(N) with HashMap.");
         tc(p, "{\"nums\":\"[2,7,11,15]\",\"target\":\"9\"}", "[0, 1]", false, null);
     }

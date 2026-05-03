@@ -135,14 +135,14 @@ public class GroqService {
         2. 'methodSignature' MUST exactly match the starter code (name, returnType, params).
         3. 'params' in 'methodSignature' must be an array of objects: {"type": "...", "name": "..."}.
         4. 'testCases' must have EXACTLY 3 visible and 2 hidden cases.
-        5. For problems like "Evaluate Reverse Polish Notation", use the standard signature: public int evalRPN(String[] tokens).
+        5. 'description' MUST be detailed LeetCode-style: Problem Statement, Examples with input/output/explanation, and a Constraints section.
         6. All newlines inside strings MUST be escaped as \\n.
         7. CRITICAL: NEVER use "null" or any reserved keywords as a method name. If the method name is unclear or unavailable, default to "solve".
         
         STRUCTURE:
         {
           "title": "...",
-          "description": "...",
+          "description": "Detailed problem statement... \\n\\nExample 1:\\nInput: ...\\nOutput: ...\\nExplanation: ...\\n\\nConstraints:\\n- ...",
           "difficulty": "Easy/Medium/Hard",
           "topic": "...",
           "starterCode": "class Solution {\\n    public [ReturnType] [MethodName]([Params]) {\\n        \\n    }\\n}",
