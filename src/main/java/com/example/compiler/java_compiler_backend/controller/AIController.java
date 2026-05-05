@@ -18,46 +18,70 @@ public class AIController {
     }
 
     @PostMapping("/analyze")
-    public Map<String, Object> analyze(@RequestBody CodeRequest req) throws Exception {
-        String system = "You are an expert Java Code Analyst. Analyze the code for logic, efficiency, and JDK 17 best practices.";
-        String user = "Problem: " + (req.getProblemId() != null ? req.getProblemId() : "Generic Java Task") + "\nCode:\n" + req.getCode();
-        String result = groq.askAI(system, user);
-        return Map.of("analysis", result);
+    public Map<String, Object> analyze(@RequestBody CodeRequest req) {
+        try {
+            String system = "You are an expert Java Code Analyst. Analyze the code for logic, efficiency, and JDK 17 best practices.";
+            String user = "Problem: " + (req.getProblemId() != null ? req.getProblemId() : "Generic Java Task") + "\nCode:\n" + req.getCode();
+            String result = groq.askAI(system, user, "llama-3.3-70b-versatile");
+            return Map.of("analysis", result);
+        } catch (Exception e) {
+            return Map.of("error", "Analysis failed: " + e.getMessage());
+        }
     }
 
     @PostMapping("/analyze-advanced")
-    public Map<String, String> analyzeAdvanced(@RequestBody CodeRequest req) throws Exception {
-        String result = groq.analyzeComplexityAdvanced(req.getCode());
-        return Map.of("radar", result);
+    public Map<String, String> analyzeAdvanced(@RequestBody CodeRequest req) {
+        try {
+            String result = groq.analyzeComplexityAdvanced(req.getCode());
+            return Map.of("radar", result);
+        } catch (Exception e) {
+            return Map.of("error", e.getMessage());
+        }
     }
 
     @PostMapping("/dry-run")
-    public Map<String, String> dryRun(@RequestBody CodeRequest req) throws Exception {
-        String result = groq.dryRun(req.getCode(), req.getInputs());
-        return Map.of("trace", result);
+    public Map<String, String> dryRun(@RequestBody CodeRequest req) {
+        try {
+            String result = groq.dryRun(req.getCode(), req.getInputs());
+            return Map.of("trace", result);
+        } catch (Exception e) {
+            return Map.of("error", e.getMessage());
+        }
     }
 
     @PostMapping("/hints")
-    public Map<String, String> hints(@RequestBody CodeRequest req) throws Exception {
-        String system = "You are a professional DSA Mentor. Give a subtle hint without spoiling the solution.";
-        String prompt = "Language: Java\nProblem: " + req.getProblemId() + "\nCode:\n" + req.getCode();
-        String response = groq.askAI(system, prompt);
-        return Map.of("hint", response);
+    public Map<String, String> hints(@RequestBody CodeRequest req) {
+        try {
+            String system = "You are a professional DSA Mentor. Give a subtle hint without spoiling the solution.";
+            String prompt = "Language: Java\nProblem: " + req.getProblemId() + "\nCode:\n" + req.getCode();
+            String response = groq.askAI(system, prompt, "llama-3.3-70b-versatile");
+            return Map.of("hint", response);
+        } catch (Exception e) {
+            return Map.of("error", e.getMessage());
+        }
     }
 
     @PostMapping("/solution")
-    public Map<String, String> solution(@RequestBody CodeRequest req) throws Exception {
-        String type = req.getType() != null ? req.getType() : "optimal";
-        String system = "You are an Elite Java Architect. Provide a " + type + " solution using modern Java idioms.";
-        String prompt = "Generate a " + type + " Java solution for problem: " + req.getProblemId() + "\nCurrent Code:\n" + req.getCode();
-        String response = groq.askAI(system, prompt);
-        return Map.of("solution", response);
+    public Map<String, String> solution(@RequestBody CodeRequest req) {
+        try {
+            String type = req.getType() != null ? req.getType() : "optimal";
+            String system = "You are an Elite Java Architect. Provide a " + type + " solution using modern Java idioms.";
+            String prompt = "Generate a " + type + " Java solution for problem: " + req.getProblemId() + "\nCurrent Code:\n" + req.getCode();
+            String response = groq.askAI(system, prompt, "llama-3.3-70b-versatile");
+            return Map.of("solution", response);
+        } catch (Exception e) {
+            return Map.of("error", e.getMessage());
+        }
     }
 
     @PostMapping("/chat")
-    public Map<String, String> chat(@RequestBody ChatRequest req) throws Exception {
-        String response = groq.askAI(req.getMessage());
-        return Map.of("reply", response);
+    public Map<String, String> chat(@RequestBody ChatRequest req) {
+        try {
+            String response = groq.askAI(null, req.getMessage(), "llama-3.3-70b-versatile");
+            return Map.of("reply", response);
+        } catch (Exception e) {
+            return Map.of("error", "AI service error: " + e.getMessage());
+        }
     }
 
     @PostMapping("/generate-test-cases")
