@@ -61,33 +61,99 @@ public class AIController {
     }
 
     @PostMapping("/generate-test-cases")
-    public Map<String, Object> generateTestCases(@RequestBody CodeRequest req) throws Exception {
-        String prompt = "You are a test case generator for Java DSA problems. Generate exactly 3 high-quality test cases:\n" +
-                "1. NORMAL CASE: A standard test case matching the problem description with typical inputs\n" +
-                "2. EDGE CASE: Edge cases like empty arrays, single elements, null/zero inputs\n" +
-                "3. BOUNDARY CASE: Max/min constraints, large values, off-by-one scenarios\n" +
-                "\n" +
-                "CRITICAL: Each test case must have MULTIPLE INPUT VARIABLES matching the function parameters.\n" +
-                "\n" +
-                "Return ONLY a valid JSON array of objects. Do not wrap in markdown or backticks. Format:\n" +
-                "[\n" +
-                "  {\n" +
-                "    \"inputs\": { \"nums\": \"[2,7,11,15]\", \"target\": \"9\" },\n" +
-                "    \"expectedOutput\": \"[0, 1]\",\n" +
-                "    \"category\": \"normal\"\n" +
-                "  }\n" +
-                "]\n" +
-                "Generate for this Java function:\n" + req.getCode();
+    public Map<String, Object> generateTestCases(@RequestBody CodeRequest req) {
+        try {
+            String problemName = (req.getProblemTitle() != null && !req.getProblemTitle().isBlank())
+                    ? req.getProblemTitle()
+                    : (req.getProblemId() != null && !req.getProblemId().isBlank() ? req.getProblemId() : "");
 
-        String response = groq.askAI(prompt);
-        if (response.startsWith("```json")) response = response.substring(7);
-        if (response.startsWith("```")) response = response.substring(3);
-        if (response.endsWith("```")) response = response.substring(0, response.length() - 3);
-        response = response.trim();
+            // If the name is too generic, try to detect it from the code
+            if (problemName.isEmpty() || problemName.equalsIgnoreCase("Generic Java Task") || problemName.equalsIgnoreCase("the problem in the code") || problemName.contains("Generated") || problemName.contains("Custom")) {
+                try {
+                    String analysis = groq.analyzeCode(req.getCode());
+                    ObjectMapper mapper = new ObjectMapper();
+                    Map<String, Object> analysisMap = mapper.readValue(analysis, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+                    if (analysisMap.containsKey("problemName")) {
+                        problemName = (String) analysisMap.get("problemName");
+                    }
+                } catch (Exception e) {
+                    System.err.println("Failed to detect problem name from code: " + e.getMessage());
+                }
+            }
+            
+            if (problemName.isEmpty()) problemName = "the algorithm in the code";
 
-        ObjectMapper mapper = new ObjectMapper();
-        List<Map<String, Object>> testCases = mapper.readValue(response, new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
-        return Map.of("testCases", testCases);
+            System.out.println("Generating test cases for detected problem: " + problemName);
+
+            String existingSection = "";
+            if (req.getExistingTestCases() != null && !req.getExistingTestCases().isBlank()
+                    && !req.getExistingTestCases().equals("[]")) {
+                existingSection = "\n\nALREADY EXISTING TEST CASES (DO NOT DUPLICATE ANY INPUT COMBINATION):\n"
+                        + req.getExistingTestCases()
+                        + "\nEvery new test case MUST use completely different input values from all listed above.\n";
+            }
+
+            String systemPrompt = "You are an expert Java DSA test case engineer. "
+                    + "Your goal is to generate high-quality, relevant, and accurate test cases for a specific Java algorithm. "
+                    + "You MUST strictly follow the method signature in the provided code.";
+
+            String prompt = "PROBLEM TITLE: " + problemName + "\n\n"
+                    + "JAVA CODE TO TEST:\n" + req.getCode() + "\n"
+                    + existingSection + "\n"
+                    + "YOUR TASK:\n"
+                    + "1. ANALYZE THE CODE: Identify the EXACT method signature (name, parameter names, and types).\n"
+                    + "2. GENERATE TEST CASES: Create exactly 5 UNIQUE test cases SPECIFICALLY for '" + problemName + "'.\n"
+                    + "   - Each case MUST cover a different scenario: (a) typical small case, (b) empty or minimal input, (c) edge case (all same, reverse sorted, etc.), (d) duplicates or negative values if applicable, (e) a slightly larger random case.\n"
+                    + "   - CRITICAL: Use ONLY the parameter names defined in the method signature. DO NOT add extra parameters like 'target', 'k', or 'val' if they are not present in the code.\n"
+                    + "   - Every test case must make semantic sense for THIS specific problem.\n"
+                    + "3. COMPUTE EXPECTED OUTPUT: Trace the code with the inputs and provide the EXACT expected result. For arrays, use the format [1,2,3]. For boolean, true/false. For integers, plain numbers.\n\n"
+                    + "ABSOLUTE RULES:\n"
+                    + "- Return ONLY a raw JSON array. No conversational text, no markdown wrappers.\n"
+                    + "- The keys in the 'inputs' object MUST MATCH the parameter names in the Java code exactly.\n"
+                    + "- No duplicate inputs compared to the existing cases listed above.\n\n"
+                    + "FORMAT EXAMPLE:\n"
+                    + "[\n"
+                    + "  { \"inputs\": { \"nums\": \"[5,1,4,2,8]\" }, \"expectedOutput\": \"[1,2,4,5,8]\", \"category\": \"normal\" }\n"
+                    + "]\n";
+
+            String response = groq.askAI(systemPrompt, prompt, "llama-3.3-70b-versatile");
+            
+            // Robust JSON extraction
+            int jsonStart = response.indexOf('[');
+            int jsonEnd = response.lastIndexOf(']');
+            if (jsonStart != -1 && jsonEnd != -1 && jsonEnd > jsonStart) {
+                response = response.substring(jsonStart, jsonEnd + 1);
+            } else {
+                if (response.startsWith("```json")) response = response.substring(7);
+                else if (response.startsWith("```")) response = response.substring(3);
+                if (response.endsWith("```")) response = response.substring(0, response.length() - 3);
+                response = response.trim();
+            }
+
+            System.out.println("AI Response (cleaned): " + response);
+
+            ObjectMapper mapper = new ObjectMapper();
+            try {
+                List<Map<String, Object>> testCases = mapper.readValue(response,
+                        new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
+                return Map.of("testCases", testCases);
+            } catch (Exception e) {
+                System.err.println("Failed to parse AI response as JSON: " + e.getMessage());
+                // Try to find if it returned an object instead of a list
+                try {
+                    Map<String, Object> root = mapper.readValue(response, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+                    if (root.containsKey("testCases") && root.get("testCases") instanceof List) {
+                        return Map.of("testCases", root.get("testCases"));
+                    }
+                } catch (Exception e2) {
+                    // Ignore second attempt failure
+                }
+                throw new RuntimeException("AI returned invalid JSON format. Please try again.");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Map.of("error", e.getMessage(), "testCases", List.of());
+        }
     }
 
     @PostMapping("/mistakes")
