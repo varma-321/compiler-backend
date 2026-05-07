@@ -77,7 +77,13 @@ public class AIController {
     @PostMapping("/chat")
     public Map<String, String> chat(@RequestBody ChatRequest req) {
         try {
-            String response = groq.askAI(null, req.getMessage(), "llama-3.3-70b-versatile");
+            String system = "You are an elite Java DSA Architect and Mentor. Always refer to the user's provided code and problem context.";
+            String userContext = "";
+            if (req.getCode() != null && !req.getCode().isBlank()) {
+                userContext = "USER CODE:\n" + req.getCode() + "\n\n";
+            }
+            String prompt = userContext + "USER QUESTION: " + req.getMessage();
+            String response = groq.askAI(system, prompt, "llama-3.3-70b-versatile");
             return Map.of("reply", response);
         } catch (Exception e) {
             return Map.of("error", "AI service error: " + e.getMessage());
