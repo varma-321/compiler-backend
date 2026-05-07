@@ -100,9 +100,22 @@ public class AIController {
             System.out.println("AI Generating problem detail for: " + key + " (" + title + ")");
             
             String json = groq.generateProblemData(key, title);
+            
+            // Robust JSON extraction: find first { and last }
+            int start = json.indexOf('{');
+            int end = json.lastIndexOf('}');
+            if (start != -1 && end != -1 && end > start) {
+                json = json.substring(start, end + 1);
+            }
+
             ObjectMapper mapper = new ObjectMapper();
             Map<String, Object> problemData = mapper.readValue(json, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
             
+            // Normalize starter_code to starterCode if needed
+            if (problemData.containsKey("starter_code") && !problemData.containsKey("starterCode")) {
+                problemData.put("starterCode", problemData.get("starter_code"));
+            }
+
             // Override difficulty if provided in request
             if (difficulty != null && !difficulty.isBlank()) {
                 problemData.put("difficulty", difficulty);

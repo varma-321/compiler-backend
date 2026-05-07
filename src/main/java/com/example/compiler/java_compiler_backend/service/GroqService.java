@@ -78,6 +78,8 @@ public class GroqService {
             throw new RuntimeException("Groq API Error: " + root.path("error").path("message").asText());
         }
 
+        // Robust cleaning: Extract content between ```json and ``` or ``` and ```
+        // if they exist anywhere in the string.
         String content = root
                 .path("choices")
                 .get(0)
@@ -85,18 +87,26 @@ public class GroqService {
                 .path("content")
                 .asText();
 
-        // Robust cleaning
         content = content.trim();
-        if (content.startsWith("```json")) {
-            content = content.substring(7);
-        } else if (content.startsWith("```")) {
-            content = content.substring(3);
+        
+        // Try to extract from ```json ... ``` or ``` ... ```
+        int jsonBlockStart = content.indexOf("```json");
+        if (jsonBlockStart != -1) {
+            int blockEnd = content.indexOf("```", jsonBlockStart + 7);
+            if (blockEnd != -1) {
+                return content.substring(jsonBlockStart + 7, blockEnd).trim();
+            }
         }
-        if (content.endsWith("```")) {
-            content = content.substring(0, content.length() - 3);
+        
+        int codeBlockStart = content.indexOf("```");
+        if (codeBlockStart != -1) {
+            int blockEnd = content.indexOf("```", codeBlockStart + 3);
+            if (blockEnd != -1) {
+                return content.substring(codeBlockStart + 3, blockEnd).trim();
+            }
         }
 
-        return content.trim();
+        return content;
     }
 
     public String analyzeCode(String code) throws Exception {
