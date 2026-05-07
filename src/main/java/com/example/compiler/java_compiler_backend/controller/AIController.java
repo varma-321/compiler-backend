@@ -84,6 +84,31 @@ public class AIController {
         }
     }
 
+    @PostMapping("/generate-problem-detail")
+    public Map<String, Object> generateProblemDetail(@RequestBody Map<String, Object> req) {
+        try {
+            String key = (String) req.get("key");
+            String title = (String) req.get("title");
+            String difficulty = (String) req.get("difficulty");
+            
+            System.out.println("AI Generating problem detail for: " + key + " (" + title + ")");
+            
+            String json = groq.generateProblemData(key, title);
+            ObjectMapper mapper = new ObjectMapper();
+            Map<String, Object> problemData = mapper.readValue(json, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+            
+            // Override difficulty if provided in request
+            if (difficulty != null && !difficulty.isBlank()) {
+                problemData.put("difficulty", difficulty);
+            }
+            
+            return problemData;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Map.of("error", "AI problem generation failed: " + e.getMessage());
+        }
+    }
+
     @PostMapping("/generate-test-cases")
     public Map<String, Object> generateTestCases(@RequestBody CodeRequest req) {
         try {
